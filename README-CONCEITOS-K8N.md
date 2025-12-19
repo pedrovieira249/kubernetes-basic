@@ -10,6 +10,7 @@
 6. [Objetos do Kubernetes](#objetos-do-kubernetes)
 7. [Comandos Básicos](#comandos-básicos)
 8. [Arquivos do Projeto](#-arquivos-do-projeto)
+   - [Segurança e Controle de Acesso (RBAC)](#10-segurança-e-controle-de-acesso-rbac)
 9. [Exemplos Práticos](#exemplos-práticos)
 10. [Fluxo de Trabalho](#fluxo-de-trabalho)
 
@@ -682,6 +683,8 @@ c:\Full Cycle\kubernetes\
 ├── configmap-env.yaml         # ConfigMap com variáveis de ambiente
 ├── configmap-config.yaml      # ConfigMap com arquivo de configuração
 ├── secret.yaml                # Secrets (USERNAME/PASSWORD)
+│
+├── security.yaml              # RBAC (ServiceAccount, Role, RoleBinding)
 │
 ├── pv.yaml                    # PersistentVolume
 ├── pvc.yaml                   # PersistentVolumeClaim
@@ -2810,6 +2813,340 @@ kubectl exec -it mysql-0 -- mysql -uroot -proot -e "SELECT * FROM teste.usuarios
 
 ---
 
+### 10. Segurança e Controle de Acesso (RBAC)
+
+#### [security.yaml](security.yaml)
+
+Implementa controle de acesso baseado em funções (Role-Based Access Control - RBAC) para o go-server.
+
+**Estrutura completa:**
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: go-server-serviceaccount
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+# Usando Role para acesso restrito ao namespace 'dev'
+kind: Role
+# Usando ClusterRole para permitir acesso em múltiplos namespaces
+# kind: ClusterRole 
+metadata:
+  name: go-server-serviceaccount-read
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["pods", "services", "endpoints", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+# Usando RoleBinding para associar ao namespace 'dev'
+kind: RoleBinding
+# kind: ClusterRoleBinding # Usando ClusterRoleBinding para associar em múltiplos
+metadata:
+  name: go-server-serviceaccount-read-binding
+subjects:
+- kind: ServiceAccount
+  name: go-server-serviceaccount
+  namespace: dev
+roleRef:
+  kind: Role
+  name: go-server-serviceaccount-read
+  apiGroup: rbac.authorization.k8s.io
+```
+
+---
+
+#### 🔐 Componentes do RBAC
+
+**1. ServiceAccount**
+- Identidade para processos rodando em pods
+- Similar a um "usuário" para sua aplicação
+- Permite autenticação segura com a API do Kubernetes
+
+**2. Role vs ClusterRole**
+
+| Aspecto | Role | ClusterRole |
+|---------|------|-------------|
+| Escopo | Namespace específico | Todo o cluster |
+| Uso | Acesso restrito a um namespace | Acesso a múltiplos namespaces |
+| Recursos | Namespace-scoped resources | Cluster-wide resources |
+
+**3. RoleBinding vs ClusterRoleBinding**
+
+| Aspecto | RoleBinding | ClusterRoleBinding |
+|---------|-------------|-------------------|
+| Associação | Role → ServiceAccount no namespace | ClusterRole → ServiceAccount no cluster |
+| Escopo | Apenas no namespace especificado | Em todo o cluster |
+
+---
+
+#### 📋 Permissões Configuradas
+
+O arquivo configura as seguintes permissões de **leitura apenas**:
+
+**API Group: "" (core)**
+- `pods` - listar e visualizar pods
+- `services` - listar e visualizar services
+- `endpoints` - listar e visualizar endpoints
+- `persistentvolumeclaims` - listar e visualizar PVCs
+
+**API Group: "apps"**
+- `pods` - listar e visualizar pods de deployments
+- `services` - listar e visualizar services de apps
+- `endpoints` - listar e visualizar endpoints de apps
+- `persistentvolumeclaims` - listar e visualizar PVCs de apps
+
+**Verbos permitidos:**
+- `get` - obter detalhes de um recurso específico
+- `list` - listar recursos
+- `watch` - observar mudanças em tempo real
+
+---
+
+#### 🚀 Como Usar
+
+**1. Criar namespace dev:**
+```bash
+kubectl create namespace dev
+```
+
+**2. Aplicar configurações de segurança:**
+```bash
+kubectl apply -f security.yaml -n dev
+
+# Verificar ServiceAccount
+kubectl get serviceaccount -n dev
+
+# Verificar Role
+kubectl get role -n dev
+
+# Verificar RoleBinding
+kubectl get rolebinding -n dev
+```
+
+**3. Associar ServiceAccount ao Deployment:**
+
+Edite o [deployment.yaml](deployment.yaml) para usar o ServiceAccount:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-server
+  namespace: dev
+spec:
+  template:
+    spec:
+      automountServiceAccountToken: false
+      serviceAccountName: go-server-serviceaccount  # Adicionar esta linha
+      containers:
+        - name: go-server
+          image: pedrovieira249/golang-kubernetes-teste:v5.6
+          # ... resto da configuração
+```
+
+**4. Aplicar o Deployment:**
+```bash
+kubectl apply -f deployment.yaml -n dev
+```
+
+**5. Testar permissões:**
+```bash
+# Entrar no pod
+kubectl exec -it <pod-name> -n dev -- /bin/sh
+
+# Dentro do pod, usar kubectl (se instalado)
+# Deve funcionar (permissões de leitura):
+kubectl get pods
+kubectl get services
+kubectl get pvc
+
+# Deve falhar (sem permissão de escrita):
+kubectl delete pod <nome>
+kubectl create deployment teste --image=nginx
+```
+
+---
+
+#### 🔄 Migrando de Role para ClusterRole
+
+Para dar acesso ao go-server em **múltiplos namespaces**:
+
+**1. Modificar security.yaml:**
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole  # Mudança aqui
+metadata:
+  name: go-server-serviceaccount-read
+rules:
+  # ... mesmas rules
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding  # Mudança aqui
+metadata:
+  name: go-server-serviceaccount-read-binding
+subjects:
+- kind: ServiceAccount
+  name: go-server-serviceaccount
+  namespace: dev  # ServiceAccount ainda está no namespace dev
+roleRef:
+  kind: ClusterRole  # Mudança aqui
+  name: go-server-serviceaccount-read
+  apiGroup: rbac.authorization.k8s.io
+```
+
+**2. Aplicar:**
+```bash
+# Deletar objetos antigos
+kubectl delete -f security.yaml -n dev
+
+# Aplicar nova configuração
+kubectl apply -f security.yaml
+```
+
+---
+
+#### ✅ Boas Práticas de Segurança
+
+**1. Princípio do Menor Privilégio**
+```yaml
+# ❌ Evite dar permissões amplas
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+
+# ✅ Seja específico
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+```
+
+**2. Use ServiceAccount Dedicados**
+```yaml
+# ❌ Não use o ServiceAccount padrão
+serviceAccountName: default
+
+# ✅ Crie ServiceAccounts específicos por aplicação
+serviceAccountName: go-server-serviceaccount
+```
+
+**3. Desabilite Auto-Mount quando não necessário**
+```yaml
+spec:
+  automountServiceAccountToken: false  # Se a app não precisa acessar API do K8s
+```
+
+**4. Limite o Escopo com Namespaces**
+- Use `Role` para aplicações que não precisam acesso cluster-wide
+- Reserve `ClusterRole` apenas quando realmente necessário
+
+**5. Auditoria Regular**
+```bash
+# Ver quem tem quais permissões
+kubectl get rolebindings -n dev
+kubectl describe rolebinding go-server-serviceaccount-read-binding -n dev
+
+# Ver todas as ClusterRoles
+kubectl get clusterroles
+
+# Ver ServiceAccounts
+kubectl get serviceaccounts -A
+```
+
+---
+
+#### 📚 Comandos Úteis
+
+```bash
+# Criar ServiceAccount
+kubectl create serviceaccount meu-sa -n dev
+
+# Verificar token do ServiceAccount
+kubectl get secret -n dev | grep meu-sa
+kubectl describe secret <token-name> -n dev
+
+# Testar permissões como outro usuário/SA
+kubectl auth can-i get pods --as=system:serviceaccount:dev:go-server-serviceaccount -n dev
+
+# Listar todas as permissões de um ServiceAccount
+kubectl describe role go-server-serviceaccount-read -n dev
+kubectl describe rolebinding go-server-serviceaccount-read-binding -n dev
+
+# Ver todos os recursos RBAC
+kubectl get roles,rolebindings,clusterroles,clusterrolebindings -A
+
+# Criar Role via comando
+kubectl create role pod-reader --verb=get,list --resource=pods -n dev
+
+# Criar RoleBinding via comando
+kubectl create rolebinding read-pods \
+  --role=pod-reader \
+  --serviceaccount=dev:go-server-serviceaccount \
+  -n dev
+```
+
+---
+
+#### ⚠️ Troubleshooting
+
+**Problema 1: "Forbidden" ao acessar recursos**
+
+```bash
+# Verificar se ServiceAccount existe
+kubectl get sa go-server-serviceaccount -n dev
+
+# Verificar se Role existe
+kubectl get role go-server-serviceaccount-read -n dev
+
+# Verificar se RoleBinding está correto
+kubectl describe rolebinding go-server-serviceaccount-read-binding -n dev
+
+# Testar permissões
+kubectl auth can-i list pods \
+  --as=system:serviceaccount:dev:go-server-serviceaccount \
+  -n dev
+```
+
+**Problema 2: ServiceAccount não é usado pelo pod**
+
+```bash
+# Verificar qual SA o pod está usando
+kubectl get pod <pod-name> -n dev -o jsonpath='{.spec.serviceAccountName}'
+
+# Se retornar vazio ou "default", o deployment não está configurado
+# Adicionar no deployment.yaml:
+spec:
+  template:
+    spec:
+      serviceAccountName: go-server-serviceaccount
+```
+
+**Problema 3: Permissões não funcionam em outro namespace**
+
+```bash
+# Role/RoleBinding são namespace-scoped
+# Use ClusterRole/ClusterRoleBinding para acesso multi-namespace
+
+# Converter para ClusterRole
+kubectl get role go-server-serviceaccount-read -n dev -o yaml > clusterrole.yaml
+# Editar: kind: Role → kind: ClusterRole
+# Remover: namespace: dev
+kubectl apply -f clusterrole.yaml
+```
+
+---
+
 ## �💡 Exemplos Práticos
 
 ### Exemplo 1: Deploy Completo de uma Aplicação Web
@@ -3471,7 +3808,7 @@ Containers
 - [ ] Configurar Ingress
 - [ ] Implementar HPA (Horizontal Pod Autoscaler)
 - [ ] Usar StatefulSets
-- [ ] Configurar RBAC (Role-Based Access Control)
+- [x] Configurar RBAC (Role-Based Access Control)
 - [ ] Trabalhar com DaemonSets
 - [ ] Implementar Network Policies
 - [ ] Usar Helm para package management
@@ -3698,22 +4035,26 @@ kubectl apply -f metrics-server.yaml
 kubectl apply -f pv.yaml
 kubectl apply -f pvc.yaml
 
-# 3. Configurações da aplicação
+# 3. Segurança (ServiceAccount, Role, RoleBinding)
+kubectl create namespace dev  # Criar namespace primeiro
+kubectl apply -f security.yaml -n dev
+
+# 4. Configurações da aplicação
 kubectl apply -f configmap-env.yaml
 kubectl apply -f configmap-config.yaml
 kubectl apply -f secret.yaml
 
-# 4. Aplicação
-kubectl apply -f deployment.yaml
+# 5. Aplicação (usando ServiceAccount configurado)
+kubectl apply -f deployment.yaml -n dev
 
-# 5. Services
+# 6. Services
 kubectl apply -f service.yaml
 kubectl apply -f mysql-service-h.yaml
 
-# 6. StatefulSets
+# 7. StatefulSets
 kubectl apply -f statefulset.yaml
 
-# 7. Auto-scaling (por último)
+# 8. Auto-scaling (por último)
 kubectl apply -f hpa.yaml
 ```
 
@@ -3805,5 +4146,5 @@ kubectl rollout history deployment go-server
 
 **Criado por:** Pedro Vieira  
 **Data:** Dezembro de 2025  
-**Versão:** 2.0
-**Atualização:** Adicionado seção completa de instalação, configuração e arquivos do projeto
+**Versão:** 2.1
+**Atualização:** Adicionado seção completa de Segurança e RBAC (security.yaml) com ServiceAccount, Role, RoleBinding e boas práticas

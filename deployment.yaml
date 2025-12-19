@@ -1,6 +1,5 @@
 apiVersion: apps/v1
 kind: Deployment
-namespace: default
 metadata:
   name: go-server
   labels:
