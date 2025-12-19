@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-h
+spec:
+  clusterIP: None # Serviço headless para StatefulSet, permitindo a comunicação direta entre os pods
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
+      # protocol: TCP

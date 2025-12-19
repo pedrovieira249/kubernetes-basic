@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+namespace: default
+metadata:
+  name: "go-server-service"
+spec:
+  selector:
+    app: "go-server"
+  type: LoadBalancer
+  # type: ClusterIP
+  # type: NodePort
+  # type: ExternalName
+  # type: Headless
+  ports:
+    - protocol: "TCP"
+      port: 80
+      targetPort: 8080

@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+namespace: default
+metadata:
+  name: go-server
+  labels:
+    app: go-server
+spec:
+  selector:
+    matchLabels:
+      app: go-server
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: go-server
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: go-server
+          image: pedrovieira249/golang-kubernetes-teste:v5.6
+
+          startupProbe: # Verificação de inicialização do container, para garantir que o container iniciou corretamente, antes de iniciar outras probes
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 3 # Quanto tempo entre cada verificação
+            failureThreshold: 30 # Quantas falhas consecutivas para considerar o container como não saudável
+
+          readinessProbe: # Verificação de prontidão do container, para saber se está pronto para receber tráfego
+            httpGet: 
+              path: /healthz
+              port: 8080
+            periodSeconds: 2 # Quanto tempo entre cada verificação
+            failureThreshold: 1 # Quantas falhas consecutivas para considerar o container como não saudável
+            successThreshold: 1 # Quantas respostas bem-sucedidas para considerar o container saudável novamente
+            # initialDelaySeconds: 5 # Tempo de espera antes de iniciar as verificações
+
+          livenessProbe: # Verificação de saúde do container
+            httpGet: 
+              path: /healthz
+              port: 8080
+            periodSeconds: 5 # Quanto tempo entre cada verificação
+            failureThreshold: 3 # Quantas falhas consecutivas para considerar o container como não saudável
+            timeoutSeconds: 1 # Tempo máximo para a resposta da verificação
+            successThreshold: 1 # Quantas respostas bem-sucedidas para considerar o container saudável novamente
+          # Variáveis de ambiente do ConfigMap
+          envFrom:
+            - configMapRef:
+                name: go-server-config-env
+            - secretRef:
+                name: goserver-secret
+          # env:
+          #   - name: SAUDACAO
+          #     valueFrom:
+          #       configMapKeyRef:
+          #         name:  go-server-config-env
+          #         key: SAUDACAO
+          #   - name: MENSAGEM
+          #     valueFrom:
+          #       configMapKeyRef:
+          #         name: go-server-config
+          #         key: SAUDACAO
+
+          # Portas
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          
+          # Recursos
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "50m"
+          
+          # volumeMounts vai DENTRO do container
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            - name: pvc-storage
+              mountPath: /app/pvc
+              
+      # volumes vai no spec do Pod (FORA de containers)
+      volumes:
+        - name: pvc-storage
+          persistentVolumeClaim:
+           claimName: go-server-pvc
+        - name: config
+          configMap:
+            name: go-server-configmap
+            items:
+              - key: valeus
+                path: myconfig.txt

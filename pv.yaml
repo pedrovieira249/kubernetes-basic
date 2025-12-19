@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv1
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce # Você pode gravar e ler o volume some no mesmo node
+    # - ReadOnlyMany # Você pode ler o volume de vários nodes
+    # - ReadWriteMany # Você pode ler e gravar o volume de vários nodes
+    # - ReadWriteOncePod # Você pode ler e gravar o volume de um pod específico em m node

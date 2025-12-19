@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+namespace: default
+metadata:
+  name: "go-server"
+  labels:
+    app: "go-server"
+spec:
+  selector:
+    matchLabels:
+      app: "go-server"
+  replicas: 5
+  template:
+    metadata:
+      name: "go-server"
+      labels:
+        app: "go-server"
+    spec:
+      containers:
+        - name: "go-server"
+          image: "pedrovieira249/golang-kubernetes-teste:v2"
