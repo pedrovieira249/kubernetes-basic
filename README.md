@@ -1,4 +1,4 @@
-# Guia de Instalação do Kind no Windows
+# Guia de Instalação do Kind
 
 ## 📚 O que é cada coisa?
 
@@ -127,6 +127,103 @@ Move-Item .\kubectl.exe C:\Kind\kubectl.exe
 Verifique a instalação:
 
 ```powershell
+kubectl version --client
+```
+---
+
+## 🚀 Instalação do Kind no Ubuntu
+
+### Pré-requisitos
+- Docker Engine instalado e em execução
+- `curl` e permissões de `sudo`
+
+### Passo 1: Download do Kind
+
+```bash
+VERSION="v0.30.0"
+ARCH="$(uname -m)"
+if [[ "$ARCH" == "x86_64" || "$ARCH" == "amd64" ]]; then FILE="kind-linux-amd64"; else FILE="kind-linux-arm64"; fi
+curl -Lo ./kind "https://kind.sigs.k8s.io/dl/${VERSION}/${FILE}"
+```
+
+### Passo 2: Instalar o binário
+
+```bash
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
+```
+
+### Passo 3: Verificar a Instalação
+
+```bash
+kind version
+```
+
+### Passo 4: Instalar kubectl (CLI do Kubernetes)
+
+```bash
+# Opção 1: Via APT (recomendado)
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+sudo mkdir -p -m 755 /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+sudo apt-get install -y kubectl
+
+# Opção 2: Download manual (detecta arquitetura)
+KVER="v1.28.0"
+ARCH_DL="$(uname -m)"; [[ "$ARCH_DL" == "x86_64" || "$ARCH_DL" == "amd64" ]] && ARCH_DL="amd64" || ARCH_DL="arm64"
+curl -LO "https://dl.k8s.io/release/${KVER}/bin/linux/${ARCH_DL}/kubectl"
+chmod +x kubectl
+sudo mv kubectl /usr/local/bin/kubectl
+
+# Verificar
+kubectl version --client
+```
+
+---
+
+## 🚀 Instalação do Kind no macOS
+
+### Pré-requisitos
+- Docker Desktop para Mac instalado e em execução
+- Homebrew instalado (para opção recomendada) ou `curl`
+
+### Passo 1: Instalar o Kind
+
+```bash
+# Opção A: Homebrew (recomendado)
+brew install kind
+
+# Opção B: Download manual (detecta arquitetura)
+VERSION="v0.30.0"
+ARCH="$(uname -m)"; [[ "$ARCH" == "x86_64" || "$ARCH" == "amd64" ]] && FILE="kind-darwin-amd64" || FILE="kind-darwin-arm64"
+curl -Lo ./kind "https://kind.sigs.k8s.io/dl/${VERSION}/${FILE}"
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
+```
+
+### Passo 2: Verificar a Instalação
+
+```bash
+kind version
+```
+
+### Passo 3: Instalar kubectl (CLI do Kubernetes)
+
+```bash
+# Opção A: Homebrew (recomendado)
+brew install kubectl
+
+# Opção B: Download manual (detecta arquitetura)
+KVER="v1.28.0"
+ARCH_DL="$(uname -m)"; [[ "$ARCH_DL" == "x86_64" || "$ARCH_DL" == "amd64" ]] && ARCH_DL="amd64" || ARCH_DL="arm64"
+curl -LO "https://dl.k8s.io/release/${KVER}/bin/darwin/${ARCH_DL}/kubectl"
+chmod +x kubectl
+sudo mv kubectl /usr/local/bin/kubectl
+
+# Verificar
 kubectl version --client
 ```
 

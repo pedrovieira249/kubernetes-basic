@@ -2,8 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: go-server
-  labels:
-    app: go-server
+       app: go-server
 spec:
   selector:
     matchLabels:
